@@ -1175,7 +1175,7 @@ pre .javascript .function {
 }
 .links-of-author a::before,
 .links-of-author span.exturl::before {
-  background: #1bf49e;
+  background: #ff67ff;
   border-radius: 50%;
   content: ' ';
   display: inline-block;
@@ -2570,4 +2570,19 @@ ul.breadcrumb li + li:last-child {
   .pagination {
     margin: 8px 0 0;
   }
+}
+/* 无边框圆形头像 */
+.site-author-image {
+  border-radius: 50% !important;
+  -webkit-border-radius: 50% !important;
+  -moz-border-radius: 50% !important;
+  transition: transform 0.8s ease !important;
+  border: none !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+/* 鼠标悬停旋转效果 */
+.site-author-image:hover {
+  transform: rotate(360deg) !important;
 }
