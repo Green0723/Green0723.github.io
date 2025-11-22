@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 7.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/bitbug_favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/bitbug_favicon.ico">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/bitbug_favicon.ico">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"example.com","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="关于这道题的知识点题目链接-&gt;[0CTF 2016]piapiapia超详细writeup PHP反序列化–字符串逃逸1.为什么逃逸字符串是s:5:”photo”;s:10:”config.php”;}？ 提前闭合nickname字段：用 &quot;;&#125; 结束当前字段 s:5:&quot;photo&quot;; - 定义字段名为”photo” s:10:&quot;config">
+<meta property="og:type" content="article">
+<meta property="og:title" content="PHP序列化漏洞与字符逃逸详解及代码审计">
+<meta property="og:url" content="http://example.com/2025/11/22/PHP%E5%BA%8F%E5%88%97%E5%8C%96%E6%BC%8F%E6%B4%9E%E4%B8%8E%E5%AD%97%E7%AC%A6%E9%80%83%E9%80%B8%E8%AF%A6%E8%A7%A3%E5%8F%8A%E4%BB%A3%E7%A0%81%E5%AE%A1%E8%AE%A1/index.html">
+<meta property="og:site_name" content="qnbb">
+<meta property="og:description" content="关于这道题的知识点题目链接-&gt;[0CTF 2016]piapiapia超详细writeup PHP反序列化–字符串逃逸1.为什么逃逸字符串是s:5:”photo”;s:10:”config.php”;}？ 提前闭合nickname字段：用 &quot;;&#125; 结束当前字段 s:5:&quot;photo&quot;; - 定义字段名为”photo” s:10:&quot;config">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2025-11-22T05:42:09.000Z">
+<meta property="article:modified_time" content="2025-11-22T05:52:06.048Z">
+<meta property="article:author" content="qnbb">
+<meta property="article:tag" content="知识点总结">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://example.com/2025/11/22/PHP%E5%BA%8F%E5%88%97%E5%8C%96%E6%BC%8F%E6%B4%9E%E4%B8%8E%E5%AD%97%E7%AC%A6%E9%80%83%E9%80%B8%E8%AF%A6%E8%A7%A3%E5%8F%8A%E4%BB%A3%E7%A0%81%E5%AE%A1%E8%AE%A1/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>PHP序列化漏洞与字符逃逸详解及代码审计 | qnbb</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">qnbb</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">学无止境</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2025/11/22/PHP%E5%BA%8F%E5%88%97%E5%8C%96%E6%BC%8F%E6%B4%9E%E4%B8%8E%E5%AD%97%E7%AC%A6%E9%80%83%E9%80%B8%E8%AF%A6%E8%A7%A3%E5%8F%8A%E4%BB%A3%E7%A0%81%E5%AE%A1%E8%AE%A1/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="qnbb">
+      <meta itemprop="description" content="犹豫就会败北">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="qnbb">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          PHP序列化漏洞与字符逃逸详解及代码审计
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2025-11-22 13:42:09 / 修改时间：13:52:06" itemprop="dateCreated datePublished" datetime="2025-11-22T13:42:09+08:00">2025-11-22</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E4%BB%A3%E7%A0%81%E5%AE%A1%E8%AE%A1%E6%89%BE%E6%BC%8F%E6%B4%9E%E7%82%B9/" itemprop="url" rel="index"><span itemprop="name">代码审计找漏洞点</span></a>
+                </span>
+            </span>
+
+          
+            <span id="/2025/11/22/PHP%E5%BA%8F%E5%88%97%E5%8C%96%E6%BC%8F%E6%B4%9E%E4%B8%8E%E5%AD%97%E7%AC%A6%E9%80%83%E9%80%B8%E8%AF%A6%E8%A7%A3%E5%8F%8A%E4%BB%A3%E7%A0%81%E5%AE%A1%E8%AE%A1/" class="post-meta-item leancloud_visitors" data-flag-title="PHP序列化漏洞与字符逃逸详解及代码审计" title="阅读次数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-eye"></i>
+              </span>
+              <span class="post-meta-item-text">阅读次数：</span>
+              <span class="leancloud-visitors-count"></span>
+            </span>
+            <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv" style="display: none;">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-eye"></i>
+              </span>
+              <span class="post-meta-item-text">阅读次数：</span>
+              <span id="busuanzi_value_page_pv"></span>
+            </span><br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="far fa-file-word"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>8.1k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="far fa-clock"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>7 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h1 id="关于这道题的知识点"><a href="#关于这道题的知识点" class="headerlink" title="关于这道题的知识点"></a>关于这道题的知识点</h1><p>题目链接-&gt;<a href="/2025/11/22/0CTF-2016-piapiapia%E8%B6%85%E8%AF%A6%E7%BB%86writeup/" title="[0CTF 2016]piapiapia超详细writeup">[0CTF 2016]piapiapia超详细writeup</a></p>
+<h2 id="PHP反序列化–字符串逃逸"><a href="#PHP反序列化–字符串逃逸" class="headerlink" title="PHP反序列化–字符串逃逸"></a>PHP反序列化–字符串逃逸</h2><h5 id="1-为什么逃逸字符串是s-5-”photo”-s-10-”config-php”-？"><a href="#1-为什么逃逸字符串是s-5-”photo”-s-10-”config-php”-？" class="headerlink" title="1.为什么逃逸字符串是s:5:”photo”;s:10:”config.php”;}？"></a>1.为什么逃逸字符串是s:5:”photo”;s:10:”config.php”;}？</h5><ol>
+<li><strong>提前闭合nickname字段</strong>：用 <code>&quot;;&#125;</code> 结束当前字段</li>
+<li><code>s:5:&quot;photo&quot;;</code> - 定义字段名为”photo”</li>
+<li><code>s:10:&quot;config.php&quot;;</code> - 定义字段值为”config.php”</li>
+<li>合起来：<strong>重新定义整个photo字段，将其值设置为”config.php”</strong></li>
+</ol>
+<p><strong>通过序列化注入，把photo字段的值从图片路径改成config.php文件路径，从而读取敏感文件</strong>。</p>
+<span id="more"></span>
+
+<h5 id="2-为什么选择要”替换”photo字段的值？"><a href="#2-为什么选择要”替换”photo字段的值？" class="headerlink" title="2.为什么选择要”替换”photo字段的值？"></a>2.为什么选择要”替换”photo字段的值？</h5><figure class="highlight autoit"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$profile = unserialize($profile)<span class="comment">;</span></span><br><span class="line">		$phone = $profile[<span class="string">&#x27;phone&#x27;</span>]<span class="comment">;</span></span><br><span class="line">		$email = $profile[<span class="string">&#x27;email&#x27;</span>]<span class="comment">;</span></span><br><span class="line">		$nickname = $profile[<span class="string">&#x27;nickname&#x27;</span>]<span class="comment">;</span></span><br><span class="line">		$photo = base64_encode(file_get_contents($profile[<span class="string">&#x27;photo&#x27;</span>]))<span class="comment">;</span></span><br></pre></td></tr></table></figure>
+
+<p>对比其他字段，只有只有 <code>photo</code> 字段会触发 <code>file_get_contents()</code> 函数调用，会读取 <code>$profile[&#39;photo&#39;]</code> 指向的文件并显示！！</p>
+<p>在profile.php中可以看出photo字段可以进行base64编码，然后被打印出来，所以，这个显示就用来显示flag。</p>
+<p>逃逸段需覆盖敏感字段（如 photo），而非无关字段（如 email）。 photo 字段通常用于文件路径或资源加载，覆盖它可能触发文件包含漏洞（如 config.php 含敏感代码）。 email 字段一般为普通数据，篡改后危害性较低。</p>
+<ol>
+<li><strong>它是唯一会触发文件读取的字段</strong></li>
+<li><strong>通过控制它的值可以实现任意文件读取</strong></li>
+<li><strong>最终目标是读取config.php中的flag</strong></li>
+</ol>
+<h2 id="题目中无-SQL-注入的原因"><a href="#题目中无-SQL-注入的原因" class="headerlink" title="题目中无 SQL 注入的原因"></a>题目中无 SQL 注入的原因</h2><p>在本题的代码审计中，class.php 的 filter 函数会对输入进行过滤：</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="function"><span class="keyword">function</span> <span class="title">filter</span>(<span class="params"><span class="variable">$string</span></span>) </span>&#123;</span><br><span class="line">    <span class="variable">$escape</span> = <span class="keyword">array</span>(<span class="string">&#x27;\&#x27;&#x27;</span>, <span class="string">&#x27;\\\\&#x27;</span>);</span><br><span class="line">    <span class="variable">$escape</span> = <span class="string">&#x27;/&#x27;</span> . <span class="title function_ invoke__">implode</span>(<span class="string">&#x27;|&#x27;</span>, <span class="variable">$escape</span>) . <span class="string">&#x27;/&#x27;</span>;</span><br><span class="line">    <span class="variable">$string</span> = <span class="title function_ invoke__">preg_replace</span>(<span class="variable">$escape</span>, <span class="string">&#x27;_&#x27;</span>, <span class="variable">$string</span>);</span><br><span class="line"></span><br><span class="line">    <span class="variable">$safe</span> = <span class="keyword">array</span>(<span class="string">&#x27;select&#x27;</span>, <span class="string">&#x27;insert&#x27;</span>, <span class="string">&#x27;update&#x27;</span>, <span class="string">&#x27;delete&#x27;</span>, <span class="string">&#x27;where&#x27;</span>);</span><br><span class="line">    <span class="variable">$safe</span> = <span class="string">&#x27;/&#x27;</span> . <span class="title function_ invoke__">implode</span>(<span class="string">&#x27;|&#x27;</span>, <span class="variable">$safe</span>) . <span class="string">&#x27;/i&#x27;</span>;</span><br><span class="line">    <span class="keyword">return</span> <span class="title function_ invoke__">preg_replace</span>(<span class="variable">$safe</span>, <span class="string">&#x27;hacker&#x27;</span>, <span class="variable">$string</span>);</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>关键点：</p>
+<ul>
+<li>filter 函数将 ‘、\ 替换为 _，破坏了 SQL 注入的关键符号（如闭合单引号）。</li>
+<li>select、where 等关键词被替换为 hacker，进一步阻断注入逻辑。</li>
+<li>注册和登录逻辑中，用户输入均通过 filter 函数处理后再拼接 SQL，例如：</li>
+</ul>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">$username</span> = <span class="variable">$mysql</span>-&gt;<span class="keyword">filter</span>(<span class="variable">$_POST</span>[<span class="string">&#x27;username&#x27;</span>]);</span><br><span class="line"><span class="variable">$sql</span> = <span class="string">&quot;SELECT * FROM users WHERE username=&#x27;<span class="variable">$username</span>&#x27;&quot;</span>;</span><br></pre></td></tr></table></figure>
+
+<p>此时，即使输入 admin’ OR 1&#x3D;1#，会被过滤为 admin_ OR 1&#x3D;1#，无法闭合单引号或保留关键词。</p>
+<h2 id="1-代码审计中的关键逻辑"><a href="#1-代码审计中的关键逻辑" class="headerlink" title="1. 代码审计中的关键逻辑"></a>1. 代码审计中的关键逻辑</h2><p>在 update.php 中，文件上传逻辑如下：</p>
+<figure class="highlight gams"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (<span class="symbol">$</span>_FILES[<span class="string">&#x27;photo&#x27;</span>][<span class="string">&#x27;size&#x27;</span>] &gt; <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="comment">// 检查文件类型和大小</span></span><br><span class="line">    <span class="keyword">if</span> (<span class="symbol">$</span>_FILES[<span class="string">&#x27;photo&#x27;</span>][<span class="string">&#x27;size&#x27;</span>] &lt; <span class="number">102400</span> &amp;&amp; <span class="symbol">$</span>_FILES[<span class="string">&#x27;photo&#x27;</span>][<span class="string">&#x27;type&#x27;</span>] == <span class="string">&quot;image/jpeg&quot;</span>) &#123;</span><br><span class="line">        <span class="symbol">$</span><span class="keyword">file</span> = <span class="symbol">$</span>_FILES[<span class="string">&#x27;photo&#x27;</span>];</span><br><span class="line">        <span class="symbol">$</span>file_name = md5(<span class="symbol">$</span><span class="keyword">file</span>[<span class="string">&#x27;name&#x27;</span>]).<span class="string">&#x27;.jpg&#x27;</span>;</span><br><span class="line">        move_uploaded_file(<span class="symbol">$</span><span class="keyword">file</span>[<span class="string">&#x27;tmp_name&#x27;</span>], <span class="string">&#x27;upload/&#x27;</span> . <span class="symbol">$</span>file_name);</span><br><span class="line">        <span class="symbol">$</span>profile[<span class="string">&#x27;photo&#x27;</span>] = <span class="string">&#x27;upload/&#x27;</span> . <span class="symbol">$</span>file_name;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>关键限制：</p>
+<ul>
+<li>文件类型强制为 image&#x2F;jpeg（MIME 类型）。</li>
+<li>文件名被 MD5 哈希后保存为 .jpg，无法保留原始扩展名（如 .php）。</li>
+<li>即使绕过前端校验上传 PHP 文件，服务器也会强制重命名为 .jpg，无法解析执行。</li>
+</ul>
+<h1 id="如何看出-unserialize-profile-未校验数据完整性？"><a href="#如何看出-unserialize-profile-未校验数据完整性？" class="headerlink" title="如何看出 unserialize($profile) 未校验数据完整性？"></a>如何看出 unserialize($profile) 未校验数据完整性？</h1><p>若代码中存在以下特征，说明未校验数据完整性，存在安全风险：</p>
+<ul>
+<li><p><strong>1.直接反序列化用户输入</strong></p>
+<figure class="highlight awk"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">$profile</span> = <span class="variable">$_POST</span>[<span class="string">&#x27;data&#x27;</span>]; <span class="regexp">//</span> 直接接收用户输入 </span><br><span class="line"><span class="variable">$data</span> = unserialize(<span class="variable">$profile</span>); <span class="regexp">//</span> 未验证来源和内容</span><br></pre></td></tr></table></figure>
+
+<p>风险：攻击者可<strong>提交任意序列化字符串</strong>（如包含恶意类的对象），触发反序列化漏洞</p>
+</li>
+<li><p><strong>2.缺少签名校验</strong></p>
+<p>无哈希签名：序列化后的数据未附加 HMAC 签名，或签名未与服务端密钥验证</p>
+<figure class="highlight awk"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="regexp">//</span> 正确做法：序列化时生成签名 </span><br><span class="line"><span class="variable">$data</span> = serialize(<span class="variable">$obj</span>); </span><br><span class="line"><span class="variable">$signature</span> = hash_hmac(<span class="string">&#x27;sha256&#x27;</span>, <span class="variable">$data</span>, <span class="variable">$secret_key</span>); </span><br><span class="line"><span class="variable">$stored_data</span> = <span class="variable">$data</span> . <span class="string">&#x27;|&#x27;</span> . <span class="variable">$signature</span>; </span><br><span class="line"></span><br><span class="line"><span class="regexp">//</span> 错误做法：直接反序列化 </span><br><span class="line"><span class="variable">$data</span> = unserialize(<span class="variable">$_POST</span>[<span class="string">&#x27;data&#x27;</span>]); <span class="regexp">//</span> 未校验签名</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>若未校验签名，攻击者可篡改数据后重新序列化，绕过检测</p>
+</li>
+<li><p><strong>3.未限制允许的类</strong></p>
+<figure class="highlight awk"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="regexp">//</span> 未设置 allowed_classes，允许任意类被反序列化 </span><br><span class="line"><span class="variable">$data</span> = unserialize(<span class="variable">$profile</span>);</span><br></pre></td></tr></table></figure>
+
+<p>风险：攻击者可构造包含 __destruct() 或 __wakeup() 魔术方法的恶意类对象，触发任意代码执行。</p>
+</li>
+<li><p><strong>4.未过滤敏感魔术方法</strong></p>
+<p>若反序列化的类包含以下方法且未做安全处理：</p>
+<figure class="highlight perl"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Malicious</span> </span>&#123; </span><br><span class="line">   public function __wakeup() &#123; </span><br><span class="line">      <span class="keyword">system</span>(<span class="variable">$_GET</span>[<span class="string">&#x27;cmd&#x27;</span>]); <span class="regexp">//</span> 危险操作 </span><br><span class="line">   &#125; </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>风险</strong>：反序列化时会自动执行这些方法，导致漏洞利用。</p>
+<h1 id="SQL注入"><a href="#SQL注入" class="headerlink" title="SQL注入"></a>SQL注入</h1><h2 id="如何判断是否存在-SQL-注入？"><a href="#如何判断是否存在-SQL-注入？" class="headerlink" title="如何判断是否存在 SQL 注入？"></a>如何判断是否存在 SQL 注入？</h2><p><strong>SQL 注入的常见特征和验证方法：</strong></p>
+<ul>
+<li>输入可控性：用户输入直接拼接到 SQL 语句中（如<code> $`sql = &quot;SELECT ... WHERE id=&#39;`$_GET[id]&#39;&quot;</code>）。</li>
+<li>未过滤特殊字符：未对 ‘、”、\、#、– 等符号进行转义或过滤。</li>
+<li>错误回显：输入异常字符（如 ‘）时，页面返回数据库错误（如 MySQL Syntax Error）。</li>
+<li>布尔盲注验证：构造 1’ AND 1&#x3D;1# 和 1’ AND 1&#x3D;2#，观察页面响应差异。</li>
+<li>时间盲注验证：构造 1’ AND SLEEP(5)#，观察页面响应时间。</li>
+</ul>
+<p><strong>SQL 注入的常见表达</strong></p>
+<ul>
+<li>闭合引号：<code>&#39; OR 1=1#、&quot; UNION SELECT 1,2,3#</code></li>
+<li>联合查询：<code>UNION SELECT 1,version(),database()</code></li>
+<li>报错注入：<code>AND extractvalue(1,concat(0x7e,(SELECT @@version)))</code></li>
+<li>布尔盲注：<code>AND (SELECT SUBSTR(password,1,1)=&#39;a&#39;)</code></li>
+<li>时间盲注：<code>AND IF(1=1,SLEEP(5),0)</code></li>
+</ul>
+</li>
+</ul>
+<h1 id="数组绕过"><a href="#数组绕过" class="headerlink" title="数组绕过"></a>数组绕过</h1><figure class="highlight stylus"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">md5</span><span class="params">(Array()</span></span>) </span><br><span class="line"><span class="function"><span class="title">sha1</span><span class="params">(Array()</span></span>)</span><br><span class="line"><span class="function"><span class="title">ereg</span><span class="params">(pattern,Array()</span></span>)</span><br><span class="line"><span class="function"><span class="title">preg_match</span><span class="params">(pattern,Array()</span></span>) </span><br><span class="line"><span class="function"><span class="title">strcmp</span><span class="params">(Array()</span></span>, “abc”)</span><br><span class="line"><span class="function"><span class="title">strpos</span><span class="params">(Array()</span></span>,“abc”)</span><br><span class="line"><span class="function"><span class="title">strlen</span><span class="params">(Array()</span></span>)</span><br></pre></td></tr></table></figure>
+
+<h1 id="文件上传漏洞的常见特征"><a href="#文件上传漏洞的常见特征" class="headerlink" title="文件上传漏洞的常见特征"></a>文件上传漏洞的常见特征</h1><ul>
+<li><p><strong>1</strong>.<strong>完全没有校验</strong></p>
+<p>代码直接接收文件并保存，不做任何检查。</p>
+<p><strong>代码特征：</strong></p>
+<ul>
+<li>代码中看不到任何与文件类型、扩展名、内容相关的检查函数。</li>
+<li>直接从前端表单获取文件名，并保存到服务器目录。</li>
+</ul>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line"><span class="variable">$upload_dir</span> = <span class="string">&#x27;/var/www/uploads/&#x27;</span>;</span><br><span class="line"><span class="variable">$uploaded_file</span> = <span class="variable">$upload_dir</span> . <span class="variable">$_FILES</span>[<span class="string">&#x27;file&#x27;</span>][<span class="string">&#x27;name&#x27;</span>]; <span class="comment">// 直接使用客户端提供的文件名</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 没有任何检查，直接移动文件</span></span><br><span class="line"><span class="title function_ invoke__">move_uploaded_file</span>(<span class="variable">$_FILES</span>[<span class="string">&#x27;file&#x27;</span>][<span class="string">&#x27;tmp_name&#x27;</span>], <span class="variable">$uploaded_file</span>);</span><br><span class="line"><span class="keyword">echo</span> <span class="string">&quot;文件上传成功！&quot;</span>;</span><br><span class="line"><span class="meta">?&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>风险：</strong> 攻击者可以上传 <code>.php</code>, <code>.jsp</code> 等恶意脚本，直接获取服务器权限。</p>
+</li>
+<li><p><strong>2.仅在前端进行校验</strong></p>
+<p><strong>代码特征：</strong></p>
+<ul>
+<li>服务器端代码非常简单，与“完全没有校验”的例子类似。</li>
+<li>在前端HTML或JavaScript中有文件类型检查的逻辑。</li>
+</ul>
+<figure class="highlight xquery"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="language-xml"><span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">&quot;file&quot;</span> <span class="attr">id</span>=<span class="string">&quot;fileInput&quot;</span> <span class="attr">accept</span>=<span class="string">&quot;.jpg,.png&quot;</span>&gt;</span></span></span><br><span class="line"><span class="language-xml"></span><span class="language-xml"><span class="tag">&lt;<span class="name">script</span>&gt;</span><span class="language-javascript"></span></span></span><br><span class="line"><span class="language-javascript"><span class="language-xml">    <span class="variable language_">document</span>.<span class="title function_">getElementById</span>(<span class="string">&#x27;fileForm&#x27;</span>).<span class="property">onsubmit</span> = <span class="keyword">function</span>(<span class="params"></span>) </span></span><span class="language-xquery">&#123;</span></span><br><span class="line"><span class="language-xquery">        var file =<span class="built_in"> document</span>.getElementById(<span class="string">&#x27;fileInput&#x27;</span>).files[<span class="number">0</span>];</span></span><br><span class="line"><span class="language-xquery">        <span class="keyword">if</span> (!file<span class="built_in">.name</span>.endsWith(<span class="string">&#x27;.jpg&#x27;</span>) &amp;&amp; !file<span class="built_in">.name</span>.endsWith(<span class="string">&#x27;.png&#x27;</span>)) &#123;</span></span><br><span class="line"><span class="language-xquery">            alert(<span class="string">&#x27;只允许上传jpg和png文件！&#x27;</span>);</span></span><br><span class="line"><span class="language-xquery">            <span class="keyword">return</span><span class="built_in"> false</span>;</span></span><br><span class="line"><span class="language-xquery">        &#125;</span><span class="language-xml"><span class="language-javascript"><span class="comment">//写着仅仅只允许.jpg和.png为后缀的文件上传</span></span></span></span><br><span class="line"><span class="language-javascript"><span class="language-xml">        <span class="comment">// 前端通过，表单提交...</span></span></span></span><br><span class="line"><span class="language-javascript"><span class="language-xml">    &#125;;</span></span></span><br><span class="line"><span class="language-javascript"><span class="language-xml"></span><span class="tag">&lt;/<span class="name">script</span>&gt;</span></span></span><br></pre></td></tr></table></figure>
+
+<p><strong>风险：</strong> 攻击者使用 Burp Suite 等工具拦截请求，修改文件名或内容类型（<code>Content-Type</code>）即可轻松绕过。略微常见</p>
+</li>
+<li><p><strong>3.黑名单策略，且名单不完整</strong></p>
+<p>服务器端有一个“不允许”的扩展名列表（黑名单），但名单可能不全或被绕过。</p>
+<p><strong>代码特征：</strong></p>
+<ul>
+<li>有一个数组或列表包含如 <code>[&#39;php&#39;, &#39;exe&#39;, &#39;jsp&#39;]</code> 等危险扩展名。</li>
+<li>检查用户文件名是否在这个列表中。</li>
+</ul>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line"><span class="variable">$blacklist</span> = <span class="keyword">array</span>(<span class="string">&#x27;php&#x27;</span>, <span class="string">&#x27;exe&#x27;</span>, <span class="string">&#x27;jsp&#x27;</span>, <span class="string">&#x27;asp&#x27;</span>, <span class="string">&#x27;sh&#x27;</span>);</span><br><span class="line"><span class="variable">$upload_dir</span> = <span class="string">&#x27;uploads/&#x27;</span>;</span><br><span class="line"><span class="variable">$filename</span> = <span class="variable">$_FILES</span>[<span class="string">&#x27;file&#x27;</span>][<span class="string">&#x27;name&#x27;</span>];</span><br><span class="line"><span class="variable">$temp_file</span> = <span class="variable">$_FILES</span>[<span class="string">&#x27;file&#x27;</span>][<span class="string">&#x27;tmp_name&#x27;</span>];</span><br><span class="line"></span><br><span class="line"><span class="comment">// 获取扩展名</span></span><br><span class="line"><span class="variable">$file_ext</span> = <span class="title function_ invoke__">strtolower</span>(<span class="title function_ invoke__">pathinfo</span>(<span class="variable">$filename</span>, PATHINFO_EXTENSION));</span><br><span class="line"></span><br><span class="line"><span class="comment">// 黑名单检查</span></span><br><span class="line"><span class="keyword">if</span> (<span class="title function_ invoke__">in_array</span>(<span class="variable">$file_ext</span>, <span class="variable">$blacklist</span>)) &#123;</span><br><span class="line">    <span class="keyword">die</span>(<span class="string">&quot;危险文件类型！&quot;</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 保存文件</span></span><br><span class="line"><span class="variable">$target_path</span> = <span class="variable">$upload_dir</span> . <span class="variable">$filename</span>;</span><br><span class="line"><span class="title function_ invoke__">move_uploaded_file</span>(<span class="variable">$temp_file</span>, <span class="variable">$target_path</span>);</span><br><span class="line"><span class="keyword">echo</span> <span class="string">&quot;上传成功: &quot;</span> . <span class="variable">$filename</span>;</span><br><span class="line"><span class="meta">?&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>绕过方法：双写，大小写混写绕过，更改后缀为php3,php4,php5,phtml,pht,php7,inc,phps,上传配置文件</p>
+</li>
+<li><p><strong>4.校验文件类型（MIME Type）</strong></p>
+<p>检查 HTTP 请求头中的 <code>Content-Type</code>。</p>
+<p><strong>代码特征：</strong></p>
+<ul>
+<li><p>代码检查 <code>$_FILES[&#39;file&#39;][&#39;type&#39;]</code> 或 <code>Part.getContentType()</code> 等。</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">$allowed_types</span> = <span class="keyword">array</span>(<span class="string">&#x27;image/jpeg&#x27;</span>, <span class="string">&#x27;image/png&#x27;</span>);</span><br><span class="line"><span class="keyword">if</span> (!<span class="title function_ invoke__">in_array</span>(<span class="variable">$_FILES</span>[<span class="string">&#x27;file&#x27;</span>][<span class="string">&#x27;type&#x27;</span>], <span class="variable">$allowed_types</span>)) &#123;</span><br><span class="line">    <span class="keyword">die</span>(<span class="string">&#x27;不允许的文件类型！&#x27;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+</ul>
+<p><strong>风险：</strong> <code>Content-Type</code> 是由浏览器或攻击工具直接发送的，完全可以被伪造。一个文本文件可以被设置为 <code>image/jpeg</code>。</p>
+</li>
+<li><p><strong>5.检查文件内容头</strong></p>
+<p>这是比检查MIME Type更可靠的方法，但并非绝对安全。</p>
+<p><strong>代码特征：</strong></p>
+<ul>
+<li><p>代码读取文件的前几个字节（文件头）来判断实际类型</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">checkFileHeader</span>(<span class="params"><span class="variable">$file</span></span>) </span>&#123;</span><br><span class="line">    <span class="variable">$header</span> = <span class="title function_ invoke__">file_get_contents</span>(<span class="variable">$file</span>, <span class="literal">false</span>, <span class="literal">null</span>, <span class="number">0</span>, <span class="number">4</span>);</span><br><span class="line">    <span class="variable">$allowed_headers</span> = [</span><br><span class="line">        <span class="string">&quot;\xFF\xD8\xFF&quot;</span>,  <span class="comment">// JPEG</span></span><br><span class="line">        <span class="string">&quot;\x89PNG&quot;</span>,        <span class="comment">// PNG</span></span><br><span class="line">        <span class="string">&quot;GIF8&quot;</span>           <span class="comment">// GIF</span></span><br><span class="line">    ];</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">foreach</span> (<span class="variable">$allowed_headers</span> <span class="keyword">as</span> <span class="variable">$valid</span>) &#123;</span><br><span class="line">        <span class="keyword">if</span> (<span class="title function_ invoke__">strpos</span>(<span class="variable">$header</span>, <span class="variable">$valid</span>) === <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (!<span class="title function_ invoke__">checkFileHeader</span>(<span class="variable">$_FILES</span>[<span class="string">&#x27;file&#x27;</span>][<span class="string">&#x27;tmp_name&#x27;</span>])) &#123;</span><br><span class="line">    <span class="keyword">die</span>(<span class="string">&quot;文件头校验失败！&quot;</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 保存文件（危险：仍使用原扩展名）</span></span><br><span class="line"><span class="title function_ invoke__">move_uploaded_file</span>(<span class="variable">$_FILES</span>[<span class="string">&#x27;file&#x27;</span>][<span class="string">&#x27;tmp_name&#x27;</span>], <span class="string">&#x27;uploads/&#x27;</span>.<span class="variable">$_FILES</span>[<span class="string">&#x27;file&#x27;</span>][<span class="string">&#x27;name&#x27;</span>]);</span><br><span class="line"><span class="meta">?&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>绕过：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">GIF89a</span><br><span class="line"><span class="tag">&lt;<span class="name">script</span> <span class="attr">language</span>=<span class="string">&quot;php&quot;</span>&gt;</span><span class="language-javascript"><span class="built_in">eval</span>($_REQUEST[<span class="string">&#x27;cmd&#x27;</span>]);</span><span class="tag">&lt;/<span class="name">script</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>将这个文件上传</p>
+</li>
+</ul>
+</li>
+<li><p><strong>6.路径与文件名可控，导致覆盖与存储型XSS</strong></p>
+<p>即使文件内容安全，但文件名和路径处理不当也会引发问题。</p>
+<p><strong>代码特征：</strong></p>
+<ul>
+<li><p>文件名或路径的一部分直接由用户输入拼接而成。</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line"><span class="comment">// 用户可控的目录名 - CTF中常见</span></span><br><span class="line"><span class="variable">$user_folder</span> = <span class="variable">$_POST</span>[<span class="string">&#x27;folder_name&#x27;</span>]; </span><br><span class="line"><span class="variable">$filename</span> = <span class="variable">$_FILES</span>[<span class="string">&#x27;file&#x27;</span>][<span class="string">&#x27;name&#x27;</span>];</span><br><span class="line"></span><br><span class="line"><span class="comment">// 危险拼接！用户可能控制$user_folder</span></span><br><span class="line"><span class="variable">$upload_path</span> = <span class="string">&quot;uploads/&quot;</span> . <span class="variable">$user_folder</span> . <span class="string">&quot;/&quot;</span> . <span class="variable">$filename</span>;</span><br><span class="line"></span><br><span class="line"><span class="title function_ invoke__">move_uploaded_file</span>(<span class="variable">$_FILES</span>[<span class="string">&#x27;file&#x27;</span>][<span class="string">&#x27;tmp_name&#x27;</span>], <span class="variable">$upload_path</span>);</span><br><span class="line"><span class="keyword">echo</span> <span class="string">&quot;文件保存到: &quot;</span> . <span class="variable">$upload_path</span>;</span><br><span class="line"><span class="meta">?&gt;</span></span><br></pre></td></tr></table></figure></li>
+</ul>
+<p>绕过：上传文件名为uploads&#x2F;..&#x2F;..&#x2F;..&#x2F;var&#x2F;www&#x2F;html&#x2F;shell.php，直接将文件写入到根目录</p>
+<ul>
+<li>文件名在网页中显示时没有转义，导致XSS攻击。</li>
+</ul>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line"><span class="comment">// 上传文件</span></span><br><span class="line"><span class="variable">$filename</span> = <span class="variable">$_FILES</span>[<span class="string">&#x27;file&#x27;</span>][<span class="string">&#x27;name&#x27;</span>];</span><br><span class="line"><span class="title function_ invoke__">move_uploaded_file</span>(<span class="variable">$_FILES</span>[<span class="string">&#x27;file&#x27;</span>][<span class="string">&#x27;tmp_name&#x27;</span>], <span class="string">&quot;uploads/&quot;</span> . <span class="variable">$filename</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// 危险：在页面中直接显示文件名，没有转义！</span></span><br><span class="line"><span class="keyword">echo</span> <span class="string">&quot;你的文件: &lt;a href=&#x27;uploads/<span class="subst">&#123;$filename&#125;</span>&#x27;&gt;&quot;</span> . <span class="variable">$filename</span> . <span class="string">&quot;&lt;/a&gt;&quot;</span>;</span><br><span class="line"><span class="meta">?&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>绕过：<code>Content-Disposition: form-data; name=&quot;file&quot;; filename=&quot;&lt;script&gt;alert(document.cookie)&lt;/script&gt;.jpg&quot;</code></p>
+</li>
+</ul>
+<h3 id="安全的上传代码应具备的特征："><a href="#安全的上传代码应具备的特征：" class="headerlink" title="安全的上传代码应具备的特征："></a>安全的上传代码应具备的特征：</h3><ol>
+<li><strong>白名单校验：</strong> 只允许明确安全的扩展名（如 <code>.jpg</code>, <code>.png</code>, <code>.pdf</code>）。</li>
+<li><strong>类型与内容双重校验：</strong> 同时检查MIME Type（虽然可伪造，但增加难度）和文件头（Magic Number）。</li>
+<li><strong>重命名文件：</strong> 使用随机生成的文件名（如UUID）保存，避免文件名冲突和攻击。</li>
+<li><strong>隔离存储：</strong> 将上传的文件存储在Web服务器根目录之外，通过脚本（如PHP）代理访问。如果必须放在Web目录，应使用专门的、禁用了脚本执行权限的目录。</li>
+<li><strong>限制文件大小：</strong> 防止拒绝服务攻击。</li>
+<li><strong>使用可靠的工具库：</strong> 如Apache Commons FileUpload的 <code>getFileName()</code> 方法可以避免一些路径遍历问题。</li>
+</ol>
+<h3 id="总结：如何在代码审计中识别？"><a href="#总结：如何在代码审计中识别？" class="headerlink" title="总结：如何在代码审计中识别？"></a>总结：如何在代码审计中识别？</h3><p>当你审查文件上传功能的代码时，问自己以下几个问题：</p>
+<ol>
+<li><strong>信任来源？</strong> 代码是否直接信任了来自客户端的任何数据（如文件名、Content-Type）？</li>
+<li><strong>校验了什么？</strong> 它校验了扩展名、MIME Type还是文件内容？</li>
+<li><strong>策略是什么？</strong> 是黑名单（不安全）还是白名单（推荐）？</li>
+<li><strong>最终存储是什么？</strong><ul>
+<li>存储的文件名是随机的吗？还是用户原来的文件名？</li>
+<li>文件最终存储在Web目录下吗？如果不是，风险大大降低。</li>
+<li>如果必须存储在Web目录，是否有 <code>.htaccess</code>（Apache）或服务器配置禁止该目录执行脚本？</li>
+</ul>
+</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E7%9F%A5%E8%AF%86%E7%82%B9%E6%80%BB%E7%BB%93/" rel="tag"># 知识点总结</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2025/11/22/0CTF-2016-piapiapia%E8%B6%85%E8%AF%A6%E7%BB%86writeup/" rel="prev" title="[0CTF 2016]piapiapia超详细writeup">
+      <i class="fa fa-chevron-left"></i> [0CTF 2016]piapiapia超详细writeup
+    </a></div>
+      <div class="post-nav-item"></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E5%85%B3%E4%BA%8E%E8%BF%99%E9%81%93%E9%A2%98%E7%9A%84%E7%9F%A5%E8%AF%86%E7%82%B9"><span class="nav-number">1.</span> <span class="nav-text">关于这道题的知识点</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#PHP%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E2%80%93%E5%AD%97%E7%AC%A6%E4%B8%B2%E9%80%83%E9%80%B8"><span class="nav-number">1.1.</span> <span class="nav-text">PHP反序列化–字符串逃逸</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#1-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%80%83%E9%80%B8%E5%AD%97%E7%AC%A6%E4%B8%B2%E6%98%AFs-5-%E2%80%9Dphoto%E2%80%9D-s-10-%E2%80%9Dconfig-php%E2%80%9D-%EF%BC%9F"><span class="nav-number">1.1.0.0.1.</span> <span class="nav-text">1.为什么逃逸字符串是s:5:”photo”;s:10:”config.php”;}？</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#2-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%80%89%E6%8B%A9%E8%A6%81%E2%80%9D%E6%9B%BF%E6%8D%A2%E2%80%9Dphoto%E5%AD%97%E6%AE%B5%E7%9A%84%E5%80%BC%EF%BC%9F"><span class="nav-number">1.1.0.0.2.</span> <span class="nav-text">2.为什么选择要”替换”photo字段的值？</span></a></li></ol></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%A2%98%E7%9B%AE%E4%B8%AD%E6%97%A0-SQL-%E6%B3%A8%E5%85%A5%E7%9A%84%E5%8E%9F%E5%9B%A0"><span class="nav-number">1.2.</span> <span class="nav-text">题目中无 SQL 注入的原因</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%BB%A3%E7%A0%81%E5%AE%A1%E8%AE%A1%E4%B8%AD%E7%9A%84%E5%85%B3%E9%94%AE%E9%80%BB%E8%BE%91"><span class="nav-number">1.3.</span> <span class="nav-text">1. 代码审计中的关键逻辑</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#%E5%A6%82%E4%BD%95%E7%9C%8B%E5%87%BA-unserialize-profile-%E6%9C%AA%E6%A0%A1%E9%AA%8C%E6%95%B0%E6%8D%AE%E5%AE%8C%E6%95%B4%E6%80%A7%EF%BC%9F"><span class="nav-number">2.</span> <span class="nav-text">如何看出 unserialize($profile) 未校验数据完整性？</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#SQL%E6%B3%A8%E5%85%A5"><span class="nav-number">3.</span> <span class="nav-text">SQL注入</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%A6%82%E4%BD%95%E5%88%A4%E6%96%AD%E6%98%AF%E5%90%A6%E5%AD%98%E5%9C%A8-SQL-%E6%B3%A8%E5%85%A5%EF%BC%9F"><span class="nav-number">3.1.</span> <span class="nav-text">如何判断是否存在 SQL 注入？</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#%E6%95%B0%E7%BB%84%E7%BB%95%E8%BF%87"><span class="nav-number">4.</span> <span class="nav-text">数组绕过</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0%E6%BC%8F%E6%B4%9E%E7%9A%84%E5%B8%B8%E8%A7%81%E7%89%B9%E5%BE%81"><span class="nav-number">5.</span> <span class="nav-text">文件上传漏洞的常见特征</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AE%89%E5%85%A8%E7%9A%84%E4%B8%8A%E4%BC%A0%E4%BB%A3%E7%A0%81%E5%BA%94%E5%85%B7%E5%A4%87%E7%9A%84%E7%89%B9%E5%BE%81%EF%BC%9A"><span class="nav-number">5.0.1.</span> <span class="nav-text">安全的上传代码应具备的特征：</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%80%BB%E7%BB%93%EF%BC%9A%E5%A6%82%E4%BD%95%E5%9C%A8%E4%BB%A3%E7%A0%81%E5%AE%A1%E8%AE%A1%E4%B8%AD%E8%AF%86%E5%88%AB%EF%BC%9F"><span class="nav-number">5.0.2.</span> <span class="nav-text">总结：如何在代码审计中识别？</span></a></li></ol></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="qnbb"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">qnbb</p>
+  <div class="site-description" itemprop="description">犹豫就会败北</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">2</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">1</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">标签</span>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2025</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">qnbb</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-area"></i>
+    </span>
+    <span title="站点总字数">21k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">19 分钟</span>
+</div>
+
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> 强力驱动
+  </div>-->
+
+        
+<div class="busuanzi-count">
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    <span class="post-meta-item" id="busuanzi_container_site_uv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+
+
+
+
+
+<script>
+  (function() {
+    function leancloudSelector(url) {
+      url = encodeURI(url);
+      return document.getElementById(url).querySelector('.leancloud-visitors-count');
+    }
+
+    function addCount(Counter) {
+      var visitors = document.querySelector('.leancloud_visitors');
+      var url = decodeURI(visitors.id);
+      var title = visitors.dataset.flagTitle;
+
+      Counter('get', '/classes/Counter?where=' + encodeURIComponent(JSON.stringify({ url })))
+        .then(response => response.json())
+        .then(({ results }) => {
+          if (results.length > 0) {
+            var counter = results[0];
+            leancloudSelector(url).innerText = counter.time + 1;
+            Counter('put', '/classes/Counter/' + counter.objectId, { time: { '__op': 'Increment', 'amount': 1 } })
+              .catch(error => {
+                console.error('Failed to save visitor count', error);
+              });
+          } else {
+              leancloudSelector(url).innerText = 'Counter not initialized! More info at console err msg.';
+              console.error('ATTENTION! LeanCloud counter has security bug, see how to solve it here: https://github.com/theme-next/hexo-leancloud-counter-security. \n However, you can still use LeanCloud without security, by setting `security` option to `false`.');
+            
+          }
+        })
+        .catch(error => {
+          console.error('LeanCloud Counter Error', error);
+        });
+    }
+
+    function showTime(Counter) {
+      var visitors = document.querySelectorAll('.leancloud_visitors');
+      var entries = [...visitors].map(element => {
+        return decodeURI(element.id);
+      });
+
+      Counter('get', '/classes/Counter?where=' + encodeURIComponent(JSON.stringify({ url: { '$in': entries } })))
+        .then(response => response.json())
+        .then(({ results }) => {
+          for (let url of entries) {
+            let target = results.find(item => item.url === url);
+            leancloudSelector(url).innerText = target ? target.time : 0;
+          }
+        })
+        .catch(error => {
+          console.error('LeanCloud Counter Error', error);
+        });
+    }
+
+    let { app_id, app_key, server_url } = {"enable":true,"app_id":"Qxc5B2BYTVrAaCgxWrMmi0gS-gzGzoHsz","app_key":"h7GB8KY7o6qDA7QebseetGVh","server_url":null,"security":true};
+    function fetchData(api_server) {
+      var Counter = (method, url, data) => {
+        return fetch(`${api_server}/1.1${url}`, {
+          method,
+          headers: {
+            'X-LC-Id'     : app_id,
+            'X-LC-Key'    : app_key,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(data)
+        });
+      };
+      if (CONFIG.page.isPost) {
+        if (CONFIG.hostname !== location.hostname) return;
+        addCount(Counter);
+      } else if (document.querySelectorAll('.post-title-link').length >= 1) {
+        showTime(Counter);
+      }
+    }
+
+    let api_server = app_id.slice(-9) !== '-MdYXbMMI' ? server_url : `https://${app_id.slice(0, 8).toLowerCase()}.api.lncldglobal.com`;
+
+    if (api_server) {
+      fetchData(api_server);
+    } else {
+      fetch('https://app-router.leancloud.cn/2/route?appId=' + app_id)
+        .then(response => response.json())
+        .then(({ api_server }) => {
+          fetchData('https://' + api_server);
+        });
+    }
+  })();
+</script>
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+</body>
+</html>
